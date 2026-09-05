@@ -57,21 +57,23 @@ I ran this live: seeded failed payments → scan opened cases with full classifi
 - `GROQ_API_KEY` (+ optionally `GROQ_MODEL`) to upgrade both the conversational agent and recovery message drafting from deterministic templates to full LLM reasoning
 - A generated `ENCRYPTION_KEY` for any real deployment
 
-## Scope note
+## Known Limitations
 
-This is a substantial, working core rather than a UI-only mockup. The
-implementation includes the following known simplifications: the webhook handler uses one app-wide `RAZORPAY_WEBHOOK_SECRET`
-(true multi-merchant routing needs a per-user secret); the recovery scan and
-follow-up sweep run synchronously when you click "Run Recovery Scan" rather
-than on a background scheduler firing exactly at `next_action_at` (that
-timestamp is computed, stored, and enforced as a cooldown — it's just not
-cron-triggered in this environment, so demo it by scanning again after the
-window passes, or by advancing the clock in a direct test); Live Mode's
-"retry" is necessarily a payment link, since Razorpay has no API to replay a
-declined charge; the teal palette is applied to the Recovery Console and its
-components specifically, while the marketing landing pages keep the earlier
-Harry Potter–inspired burgundy/gold identity — flag it if you'd rather the
-whole app move to teal.
+- **No automated test suite yet.** The recovery flow, cooldown enforcement, recovery-rate calculation, and expiry handling have been validated through manual end-to-end runs. Automated unit and integration tests would be the next step for regression coverage.
+
+- **No baseline comparison yet.** The recovery rate is currently reported as an observed percentage without comparison against a "do nothing" or naive-retry baseline. Adding these benchmarks would make the incremental impact of the recovery strategy easier to quantify.
+
+- **Risk assessment is currently static.** `risk_assessment()` uses fixed base rates for each failure category with a per-retry decay factor. It does not yet learn from historical recovery outcomes, so risk estimates remain rule-based rather than adapting over time.
+
+- **Webhook replay protection is partial.** The webhook handler verifies the HMAC signature and deduplicates events using `event_id`, but does not currently validate the payload timestamp. Adding timestamp-based freshness validation would provide stronger replay protection.
+
+- **Test Mode verification uses the simulation state.** In Test Mode, verification reads the persisted state maintained by `SimulationProvider`, which is also updated by the simulated recovery action. This provides deterministic end-to-end testing, but does not provide the independent confirmation available in Live Mode through Razorpay webhook events.
+
+- **Single app-wide webhook secret.** The current implementation uses one `RAZORPAY_WEBHOOK_SECRET`. A multi-merchant production deployment would require webhook-secret management at the individual account level.
+
+- **Recovery scan is manually triggered.** `next_action_at` is calculated and enforced as a cooldown, but the current environment does not run a background scheduler to trigger actions automatically. A production deployment would add a scheduled worker or background job.
+
+- **LLM message quality depends on Groq availability and prompting.** When `GROQ_API_KEY` is unavailable, the system safely falls back to deterministic templates. The AI-generated messaging experience therefore depends on the configured LLM provider.
 
 ## Running locally
 
