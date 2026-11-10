@@ -14,6 +14,7 @@ const STATUS_STYLE: Record<string, string> = {
   exhausted: "border-burgundy-light/40 bg-burgundy-dark/20 text-gold-bright",
   expired: "border-gold-dim/40 bg-surface text-parchmentdim",
   manual_review: "border-gold-dim/40 bg-surface text-parchmentdim",
+  security_hold: "border-[#c0504d]/60 bg-[#c0504d]/15 text-[#f0a8a5]",
 };
 
 export function RecoveryStatusPill({ status }: { status: string }) {

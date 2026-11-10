@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Bot, Check, XCircle, Loader2, Wand2 } from "lucide-react";
+import { X, Bot, Check, XCircle, Loader2, Wand2, ShieldAlert, Brain, Timer } from "lucide-react";
 import { RecoveryStatusPill, CategoryTag } from "@/components/RecoveryStatus";
 import { api, ApiError } from "@/lib/api";
 
@@ -16,6 +16,9 @@ const AGENT_LABELS: Record<string, string> = {
   Execution: "Execution",
   Verification: "Verification",
   Audit: "Audit",
+  Security: "Security",
+  Anomaly: "Anomaly Detection",
+  Simulation: "Sandbox Simulation",
 };
 
 export function CaseDetailPanel({
@@ -60,6 +63,20 @@ export function CaseDetailPanel({
       onChanged();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not approve this case.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function holdAction(kind: "release" | "confirm") {
+    setBusy(true);
+    try {
+      if (kind === "release") await api.recoveryReleaseHold(caseId);
+      else await api.recoveryConfirmHold(caseId);
+      await load();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not update the security hold.");
     } finally {
       setBusy(false);
     }
@@ -129,6 +146,101 @@ export function CaseDetailPanel({
                 </div>
               )}
             </div>
+
+                  {detail.status === "security_hold" && (
+              <div className="rounded border border-[#c0504d]/50 bg-[#c0504d]/10 p-4">
+                <p className="mb-1 flex items-center gap-2 text-sm font-semibold text-[#f0a8a5]">
+                  <ShieldAlert className="h-4 w-4" /> Security hold — automation paused
+                </p>
+                <p className="mb-3 text-xs text-parchmentdim">
+                  This customer&apos;s recent activity resembles card testing. No retry or message will be sent until you decide.
+                  {detail.ml?.security?.reasons?.length > 0 && (
+                    <span className="mt-2 block text-parchment">Why: {detail.ml.security.reasons.join("; ")}.</span>
+                  )}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => holdAction("release")}
+                    disabled={busy}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-emerald/50 bg-emerald/15 py-2.5 text-xs font-semibold tracking-widest text-emerald-200 transition hover:bg-emerald/25 disabled:opacity-50"
+                  >
+                    {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} LOOKS LEGITIMATE
+                  </button>
+                  <button
+                    onClick={() => holdAction("confirm")}
+                    disabled={busy}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-sm border border-[#c0504d]/60 py-2.5 text-xs font-semibold tracking-widest text-[#f0a8a5] transition hover:bg-[#c0504d]/20 disabled:opacity-50"
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> CONFIRM SUSPICIOUS
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {detail.ml?.risk && detail.ml.risk.factors?.length > 0 && (
+              <div className="rounded border border-[#00697C]/30 bg-[#00586A]/10 p-4">
+                <p className="mb-1 flex items-center gap-2 text-[11px] tracking-widest text-parchmentdim">
+                  <Brain className="h-3.5 w-3.5 text-[#5fd0d0]" /> WHY {Math.round(detail.ml.risk.probability * 100)}% RECOVERABLE
+                </p>
+                <p className="mb-3 text-[10px] text-parchmentdim/80">
+                  Model {detail.ml.risk.model_version} · effect of each factor vs a typical failed payment (percentage points)
+                </p>
+                <div className="space-y-2">
+                  {detail.ml.risk.factors.map((f: any) => (
+                    <div key={f.factor}>
+                      <div className="mb-0.5 flex justify-between text-[11px]">
+                        <span className="text-parchment">
+                          {f.factor} <span className="text-parchmentdim">· {f.detail}</span>
+                        </span>
+                        <span className={f.effect >= 0 ? "text-[#3fbf9f]" : "text-[#f0a8a5]"}>
+                          {f.effect >= 0 ? "+" : ""}
+                          {(f.effect * 100).toFixed(1)}
+                        </span>
+                      </div>
+                      <div className="relative h-1.5 rounded-full bg-charcoal">
+                        <div className="absolute left-1/2 top-0 h-full w-px bg-gold-dim/40" />
+                        <div
+                          className={`absolute top-0 h-full rounded-full ${f.effect >= 0 ? "bg-emerald" : "bg-[#c0504d]"}`}
+                          style={{
+                            width: `${Math.min(Math.abs(f.effect) * 100 * 1.6, 50)}%`,
+                            left: f.effect >= 0 ? "50%" : undefined,
+                            right: f.effect < 0 ? "50%" : undefined,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {detail.ml?.timing && (
+              <div className="rounded border border-gold-dim/20 bg-surface/40 p-4">
+                <p className="mb-1 flex items-center gap-2 text-[11px] tracking-widest text-parchmentdim">
+                  <Timer className="h-3.5 w-3.5 text-gold" /> LEARNED RETRY TIMING
+                </p>
+                <p className="mb-3 text-[10px] text-parchmentdim/80">
+                  Context “{String(detail.ml.timing.context).replace("|", " · ")}” — chose{" "}
+                  <span className="text-gold-bright">{fmtH(detail.ml.timing.arm_hours)}</span>
+                  {detail.ml.timing.outcome === 1 && " · retry succeeded"}
+                  {detail.ml.timing.outcome === 0 && " · retry failed"}
+                </p>
+                <div className="flex h-24 items-end gap-2">
+                  {detail.ml.timing.alternatives.map((a: any) => (
+                    <div key={a.arm_hours} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                      <div className="flex w-full flex-1 items-end">
+                        <div
+                          className={`w-full rounded-t-sm ${a.arm_hours === detail.ml.timing.arm_hours ? "bg-gold" : "bg-[#00697C]"}`}
+                          style={{ height: `${Math.max(a.posterior_mean * 100, 4)}%` }}
+                          title={`${(a.posterior_mean * 100).toFixed(0)}% estimated success · ${a.observations} observation(s)`}
+                        />
+                      </div>
+                      <span className="text-[9px] text-parchmentdim">{fmtH(a.arm_hours)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
                   {detail.status === "pending_approval" && (
               <div className="rounded border border-gold/40 bg-burgundy/20 p-4">
@@ -230,6 +342,11 @@ export function CaseDetailPanel({
       </div>
     </div>
   );
+}
+
+function fmtH(h: number | null | undefined) {
+  if (h === null || h === undefined) return "—";
+  return h < 1 ? `${Math.round(h * 60)}m` : `${h}h`;
 }
 
 function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {

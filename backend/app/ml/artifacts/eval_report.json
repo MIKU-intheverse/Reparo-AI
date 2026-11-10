@@ -1,0 +1,923 @@
+{
+  "generated_at": "2026-11-09T14:02:49Z",
+  "model_version": "risk-gbm-20261109-04cf0760",
+  "config": {
+    "cost_retry": 2.0,
+    "cost_message": 4.0,
+    "cost_review": 25.0,
+    "approvals_per_day": 8,
+    "review_hour": 10,
+    "n_cases": 6000,
+    "seed": 2024,
+    "bootstrap": 1000
+  },
+  "window_hours": 168.0,
+  "max_retries": 3,
+  "base": {
+    "world": "base",
+    "n_cases": 6000,
+    "total_failed_value": 17654022.05,
+    "policies": [
+      {
+        "policy": "do_nothing",
+        "recovery_rate": 0.1833,
+        "recovered_value": 3088579.07,
+        "value_recovery_rate": 0.175,
+        "net_value": 3088579.07,
+        "net_per_case": 514.76,
+        "retries_per_case": 0.0,
+        "messages_per_case": 0.0,
+        "reviews_per_case": 0.0,
+        "total_cost": 0.0,
+        "mean_hours_to_recovery": 80.3,
+        "net_per_case_ci95": [
+          467.6,
+          560.37
+        ],
+        "lift_vs_rules_per_case": -1583.5,
+        "lift_vs_rules_ci95": [
+          -1662.78,
+          -1512.47
+        ],
+        "lift_vs_rules_pct": -75.47,
+        "lift_significant": true
+      },
+      {
+        "policy": "naive_retry",
+        "recovery_rate": 0.67,
+        "recovered_value": 10921532.97,
+        "value_recovery_rate": 0.6186,
+        "net_value": 10896718.97,
+        "net_per_case": 1816.12,
+        "retries_per_case": 2.068,
+        "messages_per_case": 0.0,
+        "reviews_per_case": 0.0,
+        "total_cost": 24814.0,
+        "mean_hours_to_recovery": 9.0,
+        "net_per_case_ci95": [
+          1736.11,
+          1892.54
+        ],
+        "lift_vs_rules_per_case": -282.15,
+        "lift_vs_rules_ci95": [
+          -332.12,
+          -237.73
+        ],
+        "lift_vs_rules_pct": -13.45,
+        "lift_significant": true
+      },
+      {
+        "policy": "rules",
+        "recovery_rate": 0.7733,
+        "recovered_value": 12637575.12,
+        "value_recovery_rate": 0.7158,
+        "net_value": 12589607.12,
+        "net_per_case": 2098.27,
+        "retries_per_case": 1.525,
+        "messages_per_case": 0.249,
+        "reviews_per_case": 0.158,
+        "total_cost": 47968.0,
+        "mean_hours_to_recovery": 14.8,
+        "net_per_case_ci95": [
+          2016.09,
+          2189.16
+        ]
+      },
+      {
+        "policy": "ml_risk",
+        "recovery_rate": 0.7733,
+        "recovered_value": 12637575.12,
+        "value_recovery_rate": 0.7158,
+        "net_value": 12589603.12,
+        "net_per_case": 2098.27,
+        "retries_per_case": 1.525,
+        "messages_per_case": 0.249,
+        "reviews_per_case": 0.158,
+        "total_cost": 47972.0,
+        "mean_hours_to_recovery": 14.8,
+        "net_per_case_ci95": [
+          2018.82,
+          2182.55
+        ],
+        "lift_vs_rules_per_case": -0.0,
+        "lift_vs_rules_ci95": [
+          -0.0,
+          0.0
+        ],
+        "lift_vs_rules_pct": -0.0,
+        "lift_significant": false
+      },
+      {
+        "policy": "ml_full",
+        "recovery_rate": 0.817,
+        "recovered_value": 13504081.82,
+        "value_recovery_rate": 0.7649,
+        "net_value": 13458995.82,
+        "net_per_case": 2243.17,
+        "retries_per_case": 1.284,
+        "messages_per_case": 0.249,
+        "reviews_per_case": 0.158,
+        "total_cost": 45086.0,
+        "mean_hours_to_recovery": 41.8,
+        "net_per_case_ci95": [
+          2160.09,
+          2330.85
+        ],
+        "lift_vs_rules_per_case": 144.9,
+        "lift_vs_rules_ci95": [
+          115.16,
+          176.68
+        ],
+        "lift_vs_rules_pct": 6.91,
+        "lift_significant": true
+      }
+    ],
+    "learning_curve": [
+      {
+        "chunk": 1,
+        "cases": 600,
+        "rules_net_per_case": 2085.61,
+        "ml_full_net_per_case": 2132.15
+      },
+      {
+        "chunk": 2,
+        "cases": 600,
+        "rules_net_per_case": 2221.88,
+        "ml_full_net_per_case": 2249.45
+      },
+      {
+        "chunk": 3,
+        "cases": 600,
+        "rules_net_per_case": 2110.82,
+        "ml_full_net_per_case": 2289.46
+      },
+      {
+        "chunk": 4,
+        "cases": 600,
+        "rules_net_per_case": 2142.43,
+        "ml_full_net_per_case": 2266.25
+      },
+      {
+        "chunk": 5,
+        "cases": 600,
+        "rules_net_per_case": 1772.03,
+        "ml_full_net_per_case": 1968.82
+      },
+      {
+        "chunk": 6,
+        "cases": 600,
+        "rules_net_per_case": 2164.12,
+        "ml_full_net_per_case": 2323.03
+      },
+      {
+        "chunk": 7,
+        "cases": 600,
+        "rules_net_per_case": 2215.96,
+        "ml_full_net_per_case": 2373.19
+      },
+      {
+        "chunk": 8,
+        "cases": 600,
+        "rules_net_per_case": 2119.61,
+        "ml_full_net_per_case": 2332.99
+      },
+      {
+        "chunk": 9,
+        "cases": 600,
+        "rules_net_per_case": 2066.78,
+        "ml_full_net_per_case": 2189.62
+      },
+      {
+        "chunk": 10,
+        "cases": 600,
+        "rules_net_per_case": 2083.43,
+        "ml_full_net_per_case": 2306.7
+      }
+    ],
+    "bandit_vs_oracle": [
+      {
+        "reason": "insufficient_funds",
+        "oracle_best_delay_h": 72.0,
+        "learned_best_delay_h": 72.0,
+        "chosen_counts": {
+          "48.0": 105,
+          "6.0": 28,
+          "0.25": 67,
+          "72.0": 1313,
+          "24.0": 109,
+          "12.0": 43
+        },
+        "true_success_by_delay": {
+          "0.25": 0.466,
+          "6.0": 0.524,
+          "12.0": 0.571,
+          "24.0": 0.635,
+          "48.0": 0.692,
+          "72.0": 0.708
+        }
+      },
+      {
+        "reason": "otp_timeout",
+        "oracle_best_delay_h": 0.25,
+        "learned_best_delay_h": 0.25,
+        "chosen_counts": {
+          "24.0": 26,
+          "6.0": 14,
+          "0.25": 666,
+          "12.0": 39,
+          "72.0": 21,
+          "48.0": 18
+        },
+        "true_success_by_delay": {
+          "0.25": 0.57,
+          "6.0": 0.286,
+          "12.0": 0.25,
+          "24.0": 0.295,
+          "48.0": 0.295,
+          "72.0": 0.295
+        }
+      },
+      {
+        "reason": "issuer_unavailable",
+        "oracle_best_delay_h": 6.0,
+        "learned_best_delay_h": 6.0,
+        "chosen_counts": {
+          "72.0": 25,
+          "24.0": 24,
+          "0.25": 46,
+          "48.0": 72,
+          "6.0": 514,
+          "12.0": 40
+        },
+        "true_success_by_delay": {
+          "0.25": 0.376,
+          "6.0": 0.595,
+          "12.0": 0.482,
+          "24.0": 0.421,
+          "48.0": 0.405,
+          "72.0": 0.403
+        }
+      },
+      {
+        "reason": "risk_check_failed",
+        "oracle_best_delay_h": 72.0,
+        "learned_best_delay_h": 48.0,
+        "chosen_counts": {
+          "6.0": 42,
+          "0.25": 16,
+          "48.0": 241,
+          "72.0": 36,
+          "24.0": 135,
+          "12.0": 54
+        },
+        "true_success_by_delay": {
+          "0.25": 0.368,
+          "6.0": 0.394,
+          "12.0": 0.419,
+          "24.0": 0.458,
+          "48.0": 0.51,
+          "72.0": 0.538
+        }
+      },
+      {
+        "reason": "gateway_timeout",
+        "oracle_best_delay_h": 0.25,
+        "learned_best_delay_h": 0.25,
+        "chosen_counts": {
+          "6.0": 26,
+          "12.0": 12,
+          "24.0": 7,
+          "48.0": 44,
+          "0.25": 355,
+          "72.0": 32
+        },
+        "true_success_by_delay": {
+          "0.25": 0.679,
+          "6.0": 0.57,
+          "12.0": 0.525,
+          "24.0": 0.502,
+          "48.0": 0.498,
+          "72.0": 0.498
+        }
+      }
+    ]
+  },
+  "shifted": {
+    "world": "shifted",
+    "n_cases": 6000,
+    "total_failed_value": 17618112.13,
+    "policies": [
+      {
+        "policy": "do_nothing",
+        "recovery_rate": 0.183,
+        "recovered_value": 3363692.84,
+        "value_recovery_rate": 0.1909,
+        "net_value": 3363692.84,
+        "net_per_case": 560.62,
+        "retries_per_case": 0.0,
+        "messages_per_case": 0.0,
+        "reviews_per_case": 0.0,
+        "total_cost": 0.0,
+        "mean_hours_to_recovery": 81.5,
+        "net_per_case_ci95": [
+          505.68,
+          617.93
+        ],
+        "lift_vs_rules_per_case": -1648.74,
+        "lift_vs_rules_ci95": [
+          -1719.35,
+          -1578.84
+        ],
+        "lift_vs_rules_pct": -74.63,
+        "lift_significant": true
+      },
+      {
+        "policy": "naive_retry",
+        "recovery_rate": 0.7128,
+        "recovered_value": 11634703.11,
+        "value_recovery_rate": 0.6604,
+        "net_value": 11610247.11,
+        "net_per_case": 1935.04,
+        "retries_per_case": 2.038,
+        "messages_per_case": 0.0,
+        "reviews_per_case": 0.0,
+        "total_cost": 24456.0,
+        "mean_hours_to_recovery": 8.7,
+        "net_per_case_ci95": [
+          1852.24,
+          2022.43
+        ],
+        "lift_vs_rules_per_case": -274.31,
+        "lift_vs_rules_ci95": [
+          -322.53,
+          -229.34
+        ],
+        "lift_vs_rules_pct": -12.42,
+        "lift_significant": true
+      },
+      {
+        "policy": "rules",
+        "recovery_rate": 0.8197,
+        "recovered_value": 13305413.49,
+        "value_recovery_rate": 0.7552,
+        "net_value": 13256113.49,
+        "net_per_case": 2209.35,
+        "retries_per_case": 1.468,
+        "messages_per_case": 0.26,
+        "reviews_per_case": 0.17,
+        "total_cost": 49300.0,
+        "mean_hours_to_recovery": 14.7,
+        "net_per_case_ci95": [
+          2126.44,
+          2291.9
+        ]
+      },
+      {
+        "policy": "ml_risk",
+        "recovery_rate": 0.8197,
+        "recovered_value": 13305413.49,
+        "value_recovery_rate": 0.7552,
+        "net_value": 13256113.49,
+        "net_per_case": 2209.35,
+        "retries_per_case": 1.468,
+        "messages_per_case": 0.26,
+        "reviews_per_case": 0.17,
+        "total_cost": 49300.0,
+        "mean_hours_to_recovery": 14.7,
+        "net_per_case_ci95": [
+          2130.05,
+          2292.12
+        ],
+        "lift_vs_rules_per_case": 0.0,
+        "lift_vs_rules_ci95": [
+          -0.0,
+          0.0
+        ],
+        "lift_vs_rules_pct": 0.0,
+        "lift_significant": false
+      },
+      {
+        "policy": "ml_full",
+        "recovery_rate": 0.8517,
+        "recovered_value": 14118073.19,
+        "value_recovery_rate": 0.8013,
+        "net_value": 14071891.19,
+        "net_per_case": 2345.32,
+        "retries_per_case": 1.208,
+        "messages_per_case": 0.26,
+        "reviews_per_case": 0.17,
+        "total_cost": 46182.0,
+        "mean_hours_to_recovery": 37.0,
+        "net_per_case_ci95": [
+          2260.41,
+          2435.55
+        ],
+        "lift_vs_rules_per_case": 135.96,
+        "lift_vs_rules_ci95": [
+          104.19,
+          169.94
+        ],
+        "lift_vs_rules_pct": 6.15,
+        "lift_significant": true
+      }
+    ],
+    "learning_curve": [
+      {
+        "chunk": 1,
+        "cases": 600,
+        "rules_net_per_case": 2253.33,
+        "ml_full_net_per_case": 2312.2
+      },
+      {
+        "chunk": 2,
+        "cases": 600,
+        "rules_net_per_case": 2192.22,
+        "ml_full_net_per_case": 2279.04
+      },
+      {
+        "chunk": 3,
+        "cases": 600,
+        "rules_net_per_case": 2133.35,
+        "ml_full_net_per_case": 2199.18
+      },
+      {
+        "chunk": 4,
+        "cases": 600,
+        "rules_net_per_case": 2304.3,
+        "ml_full_net_per_case": 2485.28
+      },
+      {
+        "chunk": 5,
+        "cases": 600,
+        "rules_net_per_case": 2201.98,
+        "ml_full_net_per_case": 2387.53
+      },
+      {
+        "chunk": 6,
+        "cases": 600,
+        "rules_net_per_case": 2380.43,
+        "ml_full_net_per_case": 2521.63
+      },
+      {
+        "chunk": 7,
+        "cases": 600,
+        "rules_net_per_case": 2118.08,
+        "ml_full_net_per_case": 2291.13
+      },
+      {
+        "chunk": 8,
+        "cases": 600,
+        "rules_net_per_case": 2264.96,
+        "ml_full_net_per_case": 2468.72
+      },
+      {
+        "chunk": 9,
+        "cases": 600,
+        "rules_net_per_case": 2385.05,
+        "ml_full_net_per_case": 2524.64
+      },
+      {
+        "chunk": 10,
+        "cases": 600,
+        "rules_net_per_case": 1859.83,
+        "ml_full_net_per_case": 1983.81
+      }
+    ],
+    "bandit_vs_oracle": [
+      {
+        "reason": "insufficient_funds",
+        "oracle_best_delay_h": 72.0,
+        "learned_best_delay_h": 48.0,
+        "chosen_counts": {
+          "72.0": 451,
+          "6.0": 121,
+          "24.0": 317,
+          "12.0": 14,
+          "0.25": 15,
+          "48.0": 759
+        },
+        "true_success_by_delay": {
+          "0.25": 0.43,
+          "6.0": 0.535,
+          "12.0": 0.601,
+          "24.0": 0.662,
+          "48.0": 0.692,
+          "72.0": 0.693
+        }
+      },
+      {
+        "reason": "otp_timeout",
+        "oracle_best_delay_h": 0.25,
+        "learned_best_delay_h": 0.25,
+        "chosen_counts": {
+          "72.0": 10,
+          "6.0": 17,
+          "12.0": 12,
+          "48.0": 25,
+          "0.25": 640,
+          "24.0": 18
+        },
+        "true_success_by_delay": {
+          "0.25": 0.587,
+          "6.0": 0.361,
+          "12.0": 0.281,
+          "24.0": 0.3,
+          "48.0": 0.295,
+          "72.0": 0.295
+        }
+      },
+      {
+        "reason": "issuer_unavailable",
+        "oracle_best_delay_h": 6.0,
+        "learned_best_delay_h": 12.0,
+        "chosen_counts": {
+          "72.0": 22,
+          "12.0": 488,
+          "6.0": 66,
+          "24.0": 68,
+          "48.0": 17,
+          "0.25": 7
+        },
+        "true_success_by_delay": {
+          "0.25": 0.344,
+          "6.0": 0.657,
+          "12.0": 0.64,
+          "24.0": 0.529,
+          "48.0": 0.439,
+          "72.0": 0.416
+        }
+      },
+      {
+        "reason": "risk_check_failed",
+        "oracle_best_delay_h": 72.0,
+        "learned_best_delay_h": 48.0,
+        "chosen_counts": {
+          "12.0": 14,
+          "24.0": 101,
+          "0.25": 26,
+          "6.0": 31,
+          "72.0": 63,
+          "48.0": 290
+        },
+        "true_success_by_delay": {
+          "0.25": 0.37,
+          "6.0": 0.424,
+          "12.0": 0.466,
+          "24.0": 0.518,
+          "48.0": 0.558,
+          "72.0": 0.569
+        }
+      },
+      {
+        "reason": "gateway_timeout",
+        "oracle_best_delay_h": 0.25,
+        "learned_best_delay_h": 0.25,
+        "chosen_counts": {
+          "48.0": 20,
+          "24.0": 32,
+          "6.0": 59,
+          "72.0": 19,
+          "0.25": 307,
+          "12.0": 79
+        },
+        "true_success_by_delay": {
+          "0.25": 0.683,
+          "6.0": 0.616,
+          "12.0": 0.57,
+          "24.0": 0.525,
+          "48.0": 0.502,
+          "72.0": 0.499
+        }
+      }
+    ]
+  },
+  "conservative": {
+    "world": "conservative",
+    "n_cases": 6000,
+    "total_failed_value": 17939898.95,
+    "policies": [
+      {
+        "policy": "do_nothing",
+        "recovery_rate": 0.0997,
+        "recovered_value": 1714651.38,
+        "value_recovery_rate": 0.0956,
+        "net_value": 1714651.38,
+        "net_per_case": 285.78,
+        "retries_per_case": 0.0,
+        "messages_per_case": 0.0,
+        "reviews_per_case": 0.0,
+        "total_cost": 0.0,
+        "mean_hours_to_recovery": 82.1,
+        "net_per_case_ci95": [
+          254.27,
+          321.1
+        ],
+        "lift_vs_rules_per_case": -684.38,
+        "lift_vs_rules_ci95": [
+          -732.64,
+          -637.84
+        ],
+        "lift_vs_rules_pct": -70.54,
+        "lift_significant": true
+      },
+      {
+        "policy": "naive_retry",
+        "recovery_rate": 0.3237,
+        "recovered_value": 4831299.1,
+        "value_recovery_rate": 0.2693,
+        "net_value": 4799581.1,
+        "net_per_case": 799.93,
+        "retries_per_case": 2.643,
+        "messages_per_case": 0.0,
+        "reviews_per_case": 0.0,
+        "total_cost": 31718.0,
+        "mean_hours_to_recovery": 20.1,
+        "net_per_case_ci95": [
+          748.14,
+          849.98
+        ],
+        "lift_vs_rules_per_case": -170.22,
+        "lift_vs_rules_ci95": [
+          -204.36,
+          -138.31
+        ],
+        "lift_vs_rules_pct": -17.55,
+        "lift_significant": true
+      },
+      {
+        "policy": "rules",
+        "recovery_rate": 0.3873,
+        "recovered_value": 5880095.03,
+        "value_recovery_rate": 0.3278,
+        "net_value": 5820925.03,
+        "net_per_case": 970.15,
+        "retries_per_case": 2.046,
+        "messages_per_case": 0.395,
+        "reviews_per_case": 0.168,
+        "total_cost": 59170.0,
+        "mean_hours_to_recovery": 24.9,
+        "net_per_case_ci95": [
+          918.75,
+          1026.35
+        ]
+      },
+      {
+        "policy": "ml_risk",
+        "recovery_rate": 0.387,
+        "recovered_value": 5879644.64,
+        "value_recovery_rate": 0.3277,
+        "net_value": 5820688.64,
+        "net_per_case": 970.11,
+        "retries_per_case": 2.046,
+        "messages_per_case": 0.392,
+        "reviews_per_case": 0.167,
+        "total_cost": 58956.0,
+        "mean_hours_to_recovery": 24.9,
+        "net_per_case_ci95": [
+          912.96,
+          1030.17
+        ],
+        "lift_vs_rules_per_case": -0.04,
+        "lift_vs_rules_ci95": [
+          -0.15,
+          0.04
+        ],
+        "lift_vs_rules_pct": -0.0,
+        "lift_significant": false
+      },
+      {
+        "policy": "ml_full",
+        "recovery_rate": 0.4372,
+        "recovered_value": 6682210.64,
+        "value_recovery_rate": 0.3725,
+        "net_value": 6625328.64,
+        "net_per_case": 1104.22,
+        "retries_per_case": 1.873,
+        "messages_per_case": 0.392,
+        "reviews_per_case": 0.167,
+        "total_cost": 56882.0,
+        "mean_hours_to_recovery": 58.3,
+        "net_per_case_ci95": [
+          1046.21,
+          1169.65
+        ],
+        "lift_vs_rules_per_case": 134.07,
+        "lift_vs_rules_ci95": [
+          106.17,
+          162.91
+        ],
+        "lift_vs_rules_pct": 13.82,
+        "lift_significant": true
+      }
+    ],
+    "learning_curve": [
+      {
+        "chunk": 1,
+        "cases": 600,
+        "rules_net_per_case": 1089.46,
+        "ml_full_net_per_case": 1102.06
+      },
+      {
+        "chunk": 2,
+        "cases": 600,
+        "rules_net_per_case": 1091.63,
+        "ml_full_net_per_case": 1242.83
+      },
+      {
+        "chunk": 3,
+        "cases": 600,
+        "rules_net_per_case": 973.96,
+        "ml_full_net_per_case": 1008.2
+      },
+      {
+        "chunk": 4,
+        "cases": 600,
+        "rules_net_per_case": 981.06,
+        "ml_full_net_per_case": 1119.7
+      },
+      {
+        "chunk": 5,
+        "cases": 600,
+        "rules_net_per_case": 1044.99,
+        "ml_full_net_per_case": 1250.36
+      },
+      {
+        "chunk": 6,
+        "cases": 600,
+        "rules_net_per_case": 967.54,
+        "ml_full_net_per_case": 1166.14
+      },
+      {
+        "chunk": 7,
+        "cases": 600,
+        "rules_net_per_case": 822.17,
+        "ml_full_net_per_case": 961.35
+      },
+      {
+        "chunk": 8,
+        "cases": 600,
+        "rules_net_per_case": 767.36,
+        "ml_full_net_per_case": 948.33
+      },
+      {
+        "chunk": 9,
+        "cases": 600,
+        "rules_net_per_case": 1089.87,
+        "ml_full_net_per_case": 1223.03
+      },
+      {
+        "chunk": 10,
+        "cases": 600,
+        "rules_net_per_case": 873.5,
+        "ml_full_net_per_case": 1020.21
+      }
+    ],
+    "bandit_vs_oracle": [
+      {
+        "reason": "insufficient_funds",
+        "oracle_best_delay_h": 72.0,
+        "learned_best_delay_h": 48.0,
+        "chosen_counts": {
+          "72.0": 679,
+          "0.25": 63,
+          "12.0": 85,
+          "6.0": 17,
+          "48.0": 772,
+          "24.0": 43
+        },
+        "true_success_by_delay": {
+          "0.25": 0.165,
+          "6.0": 0.2,
+          "12.0": 0.233,
+          "24.0": 0.284,
+          "48.0": 0.339,
+          "72.0": 0.355
+        }
+      },
+      {
+        "reason": "otp_timeout",
+        "oracle_best_delay_h": 0.25,
+        "learned_best_delay_h": 0.25,
+        "chosen_counts": {
+          "72.0": 64,
+          "0.25": 406,
+          "12.0": 48,
+          "48.0": 65,
+          "6.0": 86,
+          "24.0": 52
+        },
+        "true_success_by_delay": {
+          "0.25": 0.217,
+          "6.0": 0.078,
+          "12.0": 0.065,
+          "24.0": 0.079,
+          "48.0": 0.079,
+          "72.0": 0.079
+        }
+      },
+      {
+        "reason": "issuer_unavailable",
+        "oracle_best_delay_h": 6.0,
+        "learned_best_delay_h": 6.0,
+        "chosen_counts": {
+          "24.0": 42,
+          "0.25": 22,
+          "6.0": 404,
+          "48.0": 108,
+          "12.0": 59,
+          "72.0": 61
+        },
+        "true_success_by_delay": {
+          "0.25": 0.11,
+          "6.0": 0.232,
+          "12.0": 0.16,
+          "24.0": 0.13,
+          "48.0": 0.123,
+          "72.0": 0.122
+        }
+      },
+      {
+        "reason": "risk_check_failed",
+        "oracle_best_delay_h": 72.0,
+        "learned_best_delay_h": 72.0,
+        "chosen_counts": {
+          "12.0": 37,
+          "72.0": 156,
+          "48.0": 127,
+          "24.0": 79,
+          "6.0": 65,
+          "0.25": 66
+        },
+        "true_success_by_delay": {
+          "0.25": 0.113,
+          "6.0": 0.125,
+          "12.0": 0.137,
+          "24.0": 0.158,
+          "48.0": 0.188,
+          "72.0": 0.207
+        }
+      },
+      {
+        "reason": "gateway_timeout",
+        "oracle_best_delay_h": 0.25,
+        "learned_best_delay_h": 0.25,
+        "chosen_counts": {
+          "72.0": 95,
+          "24.0": 72,
+          "6.0": 75,
+          "0.25": 137,
+          "48.0": 64,
+          "12.0": 87
+        },
+        "true_success_by_delay": {
+          "0.25": 0.304,
+          "6.0": 0.215,
+          "12.0": 0.186,
+          "24.0": 0.172,
+          "48.0": 0.17,
+          "72.0": 0.17
+        }
+      }
+    ]
+  },
+  "notes": [
+    "Same failed payments and random draws are replayed under every policy (common random numbers).",
+    "The risk model is trained once on the base world; the shifted world has different recovery dynamics, so it tests robustness. The bandit starts cold in every world and learns online during the run.",
+    "The conservative world is calibrated to PUBLISHED industry recovery rates (rules baseline ~40%, inside the 25-55% band vendors report) because the base world is more optimistic than published figures. See data/industry_benchmarks.json for sources and caveats.",
+    "Human review capacity is limited (reviews_per_day); ml_risk ranks the queue by expected recovered value, rules reviews first-come-first-served.",
+    "Adaptive timing trades speed for success: ml_full often waits longer before retrying, so mean hours-to-recovery rises while recovery rate and net value improve. A merchant that values cash-in-hand speed can restrict the arms.",
+    "The world is a stylised simulator, not production data: treat results as validation of the machinery."
+  ],
+  "capacity_sweep": [
+    {
+      "reviews_per_day": 2,
+      "rules_net_per_case": 1874.44,
+      "ml_risk_net_per_case": 2022.21,
+      "lift_per_case": 147.77
+    },
+    {
+      "reviews_per_day": 4,
+      "rules_net_per_case": 1976.83,
+      "ml_risk_net_per_case": 2098.16,
+      "lift_per_case": 121.34
+    },
+    {
+      "reviews_per_day": 8,
+      "rules_net_per_case": 2142.83,
+      "ml_risk_net_per_case": 2142.83,
+      "lift_per_case": -0.0
+    },
+    {
+      "reviews_per_day": 12,
+      "rules_net_per_case": 2142.82,
+      "ml_risk_net_per_case": 2142.82,
+      "lift_per_case": 0.0
+    },
+    {
+      "reviews_per_day": 24,
+      "rules_net_per_case": 2142.82,
+      "ml_risk_net_per_case": 2142.82,
+      "lift_per_case": 0.0
+    }
+  ]
+}

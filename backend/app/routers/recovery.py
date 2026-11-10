@@ -6,6 +6,7 @@ from app.config import get_settings
 from app.core.deps import get_current_user
 from app.database import get_db
 from app.models import RecoveryCase, User
+from app.ml import service as ml_service
 from app.recovery import engine
 
 router = APIRouter(prefix="/api/recovery", tags=["recovery"])
@@ -72,7 +73,7 @@ def _get_case(case_id: str, user: User, db: Session) -> RecoveryCase:
 def case_detail(case_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     case = _get_case(case_id, user, db)
     return {**_case_row(case), "trace": [_trace_row(t) for t in case.trace],
-            "communications": [_comm_row(m) for m in case.communications]}
+            "communications": [_comm_row(m) for m in case.communications], "ml": ml_service.explain_case(db, case)}
 
 
 class RejectPayload(BaseModel):
@@ -97,6 +98,43 @@ def reject(case_id: str, payload: RejectPayload, user: User = Depends(get_curren
     except ValueError as e:
         raise HTTPException(409, str(e))
     return {**_case_row(case), "trace": [_trace_row(t) for t in case.trace], "communications": [_comm_row(m) for m in case.communications]}
+
+
+@router.post("/cases/{case_id}/security/release")
+def release_hold(case_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """A reviewer judged the flagged activity legitimate -> resume normal recovery."""
+    case = _get_case(case_id, user, db)
+    try:
+        engine.release_security_hold(user, db, case, actor=user.email)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return {**_case_row(case), "trace": [_trace_row(t) for t in case.trace], "communications": [_comm_row(m) for m in case.communications],
+            "ml": ml_service.explain_case(db, case)}
+
+
+@router.post("/cases/{case_id}/security/confirm")
+def confirm_hold(case_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """A reviewer confirmed the activity is suspicious -> stop recovery for good."""
+    case = _get_case(case_id, user, db)
+    try:
+        engine.confirm_security_hold(user, db, case, actor=user.email)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    return {**_case_row(case), "trace": [_trace_row(t) for t in case.trace], "communications": [_comm_row(m) for m in case.communications],
+            "ml": ml_service.explain_case(db, case)}
+
+
+class AdvancePayload(BaseModel):
+    hours: float = 24.0
+
+
+@router.post("/simulate/advance")
+def advance(payload: AdvancePayload, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Test Mode: fast-forward the simulated clock so scheduled retries / follow-ups come due."""
+    try:
+        return engine.advance_clock(user, db, payload.hours)
+    except ValueError as e:
+        raise HTTPException(403, str(e))
 
 
 @router.get("/metrics")

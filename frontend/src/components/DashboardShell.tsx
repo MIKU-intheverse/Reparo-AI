@@ -17,12 +17,14 @@ import {
   FlaskConical,
   Landmark,
   Gavel,
+  BrainCircuit,
 } from "lucide-react";
 import { setToken, setEnvironment } from "@/lib/api";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 
 const NAV = [
   { href: "/dashboard", label: "Recovery Console", icon: LayoutDashboard },
+  { href: "/dashboard/ml", label: "ML Insights", icon: BrainCircuit },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
   { href: "/dashboard/orders", label: "Orders", icon: Package },

@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Unit + integration tests (ML layer, guardrails, engine, API)
+        run: python -m pytest
+      - name: Security lint (bandit) and dependency audit
+        run: |
+          pip install bandit pip-audit
+          bandit -q -r app -x app/ml/artifacts --severity-level medium || true
+          pip-audit -r requirements.txt || true
+      - name: Artifacts are reproducible (retrain + re-evaluate must succeed)
+        run: |
+          python -m app.ml.train --n-cases 6000
+          python -m app.ml.evaluate --n-cases 1500
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build

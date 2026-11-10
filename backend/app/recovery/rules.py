@@ -154,3 +154,41 @@ def draft_message_template(category: str, amount: float, currency: str = "INR", 
                 f"or restricted for this transaction. You can complete your payment using another method here: {{link}}")
     return (f"We noticed your payment of {amt} didn't go through. You can complete your payment "
             f"using another method here: {{link}}")
+
+
+# ---------------------------------------------------------------------------
+# Guardrails for the ML layer (app/ml). Models may *propose* a probability or
+# a retry delay, but every proposal is passed through these deterministic
+# checks before it can influence a case. The ML layer cannot raise a retry
+# cap, skip the cooldown, shorten approval requirements, or schedule outside
+# the recovery window — those boundaries live here, in plain auditable code.
+# ---------------------------------------------------------------------------
+PROBABILITY_FLOOR = 0.01
+PROBABILITY_CEIL = 0.97
+
+
+def guard_probability(p) -> float | None:
+    """Sanitise a model-produced probability. Returns None for NaN / non-numeric
+    values so the caller can fall back to the rule-based score."""
+    try:
+        v = float(p)
+    except (TypeError, ValueError):
+        return None
+    if v != v:  # NaN
+        return None
+    return min(max(v, PROBABILITY_FLOOR), PROBABILITY_CEIL)
+
+
+def allowed_delay_arms(arms: list[float], retry_count: int, cooldown_hours: float,
+                       remaining_window_hours: float) -> list[float]:
+    """Retry delays the timing bandit is allowed to choose from. A delay must
+    (a) respect the cooldown once an action has already been taken, and
+    (b) leave the retry inside the recovery window."""
+    allowed = []
+    for a in sorted(set(float(x) for x in arms)):
+        if retry_count > 0 and a < cooldown_hours:
+            continue
+        if a >= remaining_window_hours:
+            continue
+        allowed.append(a)
+    return allowed

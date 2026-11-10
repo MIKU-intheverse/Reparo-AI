@@ -7,3 +7,8 @@ __pycache__/
 *.db
 .env
 .env.local
+.pytest_cache/
+tsconfig.tsbuildinfo
+# written by POST /api/ml/evaluation/run; the committed eval_report.json is the reproducible one
+backend/app/ml/artifacts/eval_report_latest.json
+

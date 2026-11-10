@@ -9,7 +9,15 @@ Entry points used by the router:
   run_scan(user, db)                 -> Detector + follow-up/verification pass
   approve_case(user, db, case, actor)-> human approval -> triggers execution
   reject_case(user, db, case, actor, reason)
+  release_security_hold / confirm_security_hold -> human decision on an anomaly hold
+  advance_clock(user, db, hours)     -> Test Mode only: simulate time passing
   get_metrics(user, db)              -> revenue recovery funnel, computed from DB
+
+ML layer (app/ml, reached only through app.ml.service): a calibrated risk model
+scores recoverability, a Thompson-sampling bandit chooses retry delays, and
+anomaly detectors place suspected card-testing on a security hold and defer
+retries during payment-method outages. All of it sits INSIDE the deterministic
+guardrails of rules.py and falls back to them if anything fails.
 """
 from datetime import datetime, timedelta
 
@@ -18,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core import llm
 from app.core.email import send_notification_email
+from app.ml import service as ml
 from app.models import RecoveryCase, RecoveryCommunication, RecoveryTraceStep, User
 from app.providers.factory import get_provider
 from app.providers.razorpay_provider import RazorpayAPIError
@@ -41,7 +50,12 @@ def _parse_dt(value) -> datetime:
 
 
 _TERMINAL_OR_GATED = {"recovered", "rejected", "suppressed", "exhausted", "expired",
-                      "manual_review", "pending_approval"}
+                      "manual_review", "pending_approval", "security_hold"}
+
+
+def _fmt_delay(delta: timedelta) -> str:
+    h = delta.total_seconds() / 3600
+    return f"{h * 60:.0f} min" if h < 1 else (f"{h:.0f}h" if abs(h - round(h)) < 0.05 else f"{h:.1f}h")
 
 
 def run_scan(user: User, db: Session) -> list[RecoveryCase]:
@@ -52,16 +66,21 @@ def run_scan(user: User, db: Session) -> list[RecoveryCase]:
     provider = get_provider(user, db)
     result = provider.get_payments(limit=settings.recovery_max_cases_per_scan, status="failed")
 
+    # ML: one payment snapshot per scan (features + anomaly checks), and outage alerts
+    # refreshed BEFORE any case is processed so retries can be deferred in the same pass.
+    ctx = ml.build_context(user, db, provider)
+    ml.sync_outage_alerts(db, user, ctx)
+
     processed: list[RecoveryCase] = []
     for p in result["items"]:
         case = db.query(RecoveryCase).filter_by(user_id=user.id, payment_id=p["id"]).first()
         if case is None:
-            case = _open_case(user, db, p)
+            case = _open_case(user, db, p, ctx)
             processed.append(case)
         elif case.status == "failed":
             _trace(db, case, "Detector", "Re-checked after unsuccessful retry",
                    "Payment is still in a failed state on the latest sync; re-running the recovery pipeline.")
-            _run_pipeline(user, db, case)
+            _run_pipeline(user, db, case, ctx)
             processed.append(case)
 
     waiting_cases = db.query(RecoveryCase).filter_by(user_id=user.id, status="waiting").all()
@@ -69,11 +88,12 @@ def run_scan(user: User, db: Session) -> list[RecoveryCase]:
         _process_waiting_case(user, db, case, provider)
         processed.append(case)
 
+    ml.sweep_outcomes(db, user.id)
     db.commit()
     return processed
 
 
-def _open_case(user: User, db: Session, payment: dict) -> RecoveryCase:
+def _open_case(user: User, db: Session, payment: dict, ctx=None) -> RecoveryCase:
     case = RecoveryCase(
         user_id=user.id, source=user.environment, payment_id=payment["id"], order_id=payment.get("order_id"),
         amount=payment["amount"], currency=payment.get("currency", "INR"),
@@ -92,17 +112,33 @@ def _open_case(user: User, db: Session, payment: dict) -> RecoveryCase:
            f"(reason: {case.failure_reason_raw or 'not provided'}). Recovery window: "
            f"{settings.recovery_window_days:.0f} day(s).")
 
-    _run_pipeline(user, db, case)
+    _run_pipeline(user, db, case, ctx)
     return case
 
 
-def _run_pipeline(user: User, db: Session, case: RecoveryCase):
+def _run_pipeline(user: User, db: Session, case: RecoveryCase, ctx=None, skip_security: bool = False):
     category = rules.classify_failure(case.failure_reason_raw)
     case.category = category
     _trace(db, case, "Classifier", f"Classified as {category.replace('_', ' ')}",
            f"Failure reason '{case.failure_reason_raw or 'unknown'}' matched the {category.replace('_', ' ')} pattern.")
 
-    probability = rules.risk_assessment(category, case.retry_count)
+    # ---- Security screen: suspected card testing is NEVER retried or messaged -------------
+    if not skip_security:
+        screen = ml.screen_case(db, user, case, ctx)
+        if screen.hold:
+            case.status = "security_hold"
+            case.recovery_probability = 0.0
+            case.expected_recovery_value = 0.0
+            case.recommended_action = "none"
+            _trace(db, case, "Security", "Held for security review",
+                   f"This customer's recent activity looks like card testing (anomaly score {screen.score:.2f} ≥ "
+                   f"threshold {screen.threshold:.2f}, detector: {screen.source.replace('_', ' ')}). "
+                   + ("; ".join(screen.reasons) + ". " if screen.reasons else "")
+                   + "No retry or customer contact will happen until a reviewer releases or confirms the hold.")
+            return
+
+    risk = ml.assess_risk(db, case, ctx)
+    probability = risk.probability
     case.recovery_probability = probability
     case.expected_recovery_value = round(case.amount * probability, 2)
 
@@ -110,12 +146,19 @@ def _run_pipeline(user: User, db: Session, case: RecoveryCase):
         case.status = "suppressed"
         _trace(db, case, "RiskAssessment", "Marked non-recoverable",
                f"{probability * 100:.0f}% recovery probability is below the "
-               f"{settings.recovery_min_probability * 100:.0f}% threshold — not pursuing further action.")
+               f"{settings.recovery_min_probability * 100:.0f}% threshold — not pursuing further action."
+               + risk.factor_text())
         return
 
-    _trace(db, case, "RiskAssessment", f"{probability * 100:.0f}% recovery probability — recoverable",
-           f"Expected recovered value ≈ {case.currency} {case.expected_recovery_value:,.2f} "
-           f"based on category and {case.retry_count} prior attempt(s).")
+    if risk.source == "ml":
+        baseline = rules.risk_assessment(category, case.retry_count)
+        _trace(db, case, "RiskAssessment", f"{probability * 100:.0f}% recovery probability — recoverable",
+               f"Expected recovered value ≈ {case.currency} {case.expected_recovery_value:,.2f}. Calibrated model "
+               f"{risk.version} (the static category prior would have said {baseline * 100:.0f}%)." + risk.factor_text())
+    else:
+        _trace(db, case, "RiskAssessment", f"{probability * 100:.0f}% recovery probability — recoverable",
+               f"Expected recovered value ≈ {case.currency} {case.expected_recovery_value:,.2f} "
+               f"based on category and {case.retry_count} prior attempt(s).")
 
     strategy = rules.choose_strategy(category, case.retry_count)
     case.recommended_action = strategy
@@ -126,10 +169,14 @@ def _run_pipeline(user: User, db: Session, case: RecoveryCase):
     }.get(strategy, "")
     _trace(db, case, "Strategy", f"Recommend: {strategy.replace('_', ' ')}", strategy_reason)
 
-    delta = rules.choose_timing(category)
+    timing = ml.choose_timing(db, user, case, strategy)
+    delta = timing.delay
     case.next_action_at = datetime.utcnow() + delta
-    _trace(db, case, "Timing", f"Act at {case.next_action_at.strftime('%H:%M:%S')}",
-           rules.timing_reason(category, delta))
+    if timing.source == "bandit":
+        _trace(db, case, "Timing", f"Retry in {_fmt_delay(delta)} (learned timing)", timing.explanation)
+    else:
+        _trace(db, case, "Timing", f"Act at {case.next_action_at.strftime('%H:%M:%S')}",
+               rules.timing_reason(category, delta))
 
     if rules.requires_approval(strategy):
         message_type = rules.next_message_type(case.communications_sent, case.max_communications)
@@ -146,7 +193,12 @@ def _run_pipeline(user: User, db: Session, case: RecoveryCase):
             case.status = "approved"
             _trace(db, case, "Approval", "Auto-approved — bounded silent retry",
                    f"Retry {case.retry_count + 1}/{case.max_retries}: no customer contact, within the configured retry cap.")
-            _execute_case(user, db, case)
+            if timing.source == "bandit" and delta > timedelta(hours=settings.ml_immediate_threshold_hours):
+                case.status = "waiting"
+                _trace(db, case, "Execution", f"Retry scheduled for +{_fmt_delay(delta)}",
+                       "Waiting for the learned retry delay before attempting; recovery is verified on the next scan after that.")
+            else:
+                _execute_case(user, db, case)
         else:
             case.status = "exhausted"
             _trace(db, case, "Approval", "Retry limit reached",
@@ -189,6 +241,7 @@ def approve_case(user: User, db: Session, case: RecoveryCase, actor: str) -> Rec
     case.status = "approved"
     _trace(db, case, "Approval", "Approved by reviewer", "Reviewer approved the recommended recovery action.", actor=actor)
     _execute_case(user, db, case)
+    ml.sweep_outcomes(db, user.id)
     db.commit()
     return case
 
@@ -200,8 +253,61 @@ def reject_case(user: User, db: Session, case: RecoveryCase, actor: str, reason:
     _trace(db, case, "Approval", "Rejected by reviewer", reason or "No reason provided.", actor=actor)
     _trace(db, case, "Audit", "Case suppressed",
            "Automated recovery for this payment is suppressed after human rejection. No further action will be taken.")
+    ml.sweep_outcomes(db, user.id)
     db.commit()
     return case
+
+
+def release_security_hold(user: User, db: Session, case: RecoveryCase, actor: str) -> RecoveryCase:
+    """A reviewer judged the flagged activity legitimate: resume the normal pipeline
+    (security screening is skipped for this one pass; every other guardrail still applies)."""
+    if case.status != "security_hold":
+        raise ValueError(f"Case is '{case.status}', not on security hold.")
+    _trace(db, case, "Security", "Hold released by reviewer",
+           "Reviewer judged the activity legitimate; resuming normal recovery under all standard limits.", actor=actor)
+    ml.resolve_alerts_for_case(db, case, "acknowledged")
+    case.status = "analyzing"
+    _run_pipeline(user, db, case, ml.build_context(user, db), skip_security=True)
+    ml.sweep_outcomes(db, user.id)
+    db.commit()
+    return case
+
+
+def confirm_security_hold(user: User, db: Session, case: RecoveryCase, actor: str) -> RecoveryCase:
+    """A reviewer confirmed the activity is suspicious: recovery stops permanently."""
+    if case.status != "security_hold":
+        raise ValueError(f"Case is '{case.status}', not on security hold.")
+    case.status = "suppressed"
+    _trace(db, case, "Security", "Hold confirmed — treated as suspicious", "Reviewer confirmed the pattern is suspicious.", actor=actor)
+    _trace(db, case, "Audit", "Case suppressed",
+           "No retry or customer contact will ever be made for this payment. Escalate through your fraud process.")
+    ml.resolve_alerts_for_case(db, case, "acknowledged")
+    ml.sweep_outcomes(db, user.id)
+    db.commit()
+    return case
+
+
+def advance_clock(user: User, db: Session, hours: float) -> dict:
+    """Test Mode only: simulate `hours` passing by moving every timestamp the
+    pipeline reasons about into the past (cases, sandbox payments, alerts)."""
+    if user.environment != "test":
+        raise ValueError("Time can only be advanced in Test Mode.")
+    hours = float(min(max(hours, 0.0), 24 * 14))
+    delta = timedelta(hours=hours)
+    n = 0
+    for c in db.query(RecoveryCase).filter_by(user_id=user.id).all():
+        for attr in ("created_at", "next_action_at", "last_action_at", "recovery_window_expires_at",
+                     "failed_payment_created_at"):
+            v = getattr(c, attr)
+            if v is not None:
+                setattr(c, attr, v - delta)
+        n += 1
+    provider = get_provider(user, db)
+    if hasattr(provider, "shift_time"):
+        provider.shift_time(hours)
+    ml.shift_alerts(db, user.id, delta)
+    db.commit()
+    return {"advanced_hours": hours, "cases_shifted": n}
 
 
 def _execute_case(user: User, db: Session, case: RecoveryCase):
@@ -218,6 +324,20 @@ def _execute_case(user: User, db: Session, case: RecoveryCase):
                "An action was already taken recently for this case; waiting for the cooldown window to elapse.")
         return
 
+    # ML: retrying into a detected payment-method outage would burn the bounded retry
+    # budget for nothing. Defer (bounded) without consuming a retry or touching the cooldown.
+    if case.recommended_action == "retry":
+        outage = ml.active_outage(db, user.id, case.method)
+        if outage is not None and ml.deferrals_used(db, case) < settings.ml_max_outage_deferrals:
+            case.status = "waiting"
+            case.next_action_at = datetime.utcnow() + timedelta(minutes=settings.ml_outage_hold_minutes)
+            _trace(db, case, "Anomaly", "Retry deferred — payment method outage",
+                   f"Failures on '{case.method}' are spiking across customers (suspected gateway/bank outage). Retrying now "
+                   f"would likely fail and use up one of {case.max_retries} bounded retries, so the retry is postponed "
+                   f"{settings.ml_outage_hold_minutes} min and no attempt is consumed "
+                   f"(deferral {ml.deferrals_used(db, case) + 1}/{settings.ml_max_outage_deferrals}).")
+            return
+
     case.last_action_at = datetime.utcnow()
     provider = get_provider(user, db)
 
@@ -229,12 +349,15 @@ def _execute_case(user: User, db: Session, case: RecoveryCase):
 
         case.status = "retrying"
         case.retry_count += 1
+        ml.mark_timing_executed(db, case)
         _trace(db, case, "Execution", f"Retry attempt {case.retry_count}/{case.max_retries} initiated",
                "Executing the bounded automatic retry against the payment gateway.")
 
         if user.environment == "test":
-            result = provider.attempt_recovery_retry(case.payment_id, case.category)
-            _verify_retry_outcome(db, case, result)
+            age_h = max((datetime.utcnow() - case.created_at).total_seconds() / 3600.0, 0.0)
+            result = provider.attempt_recovery_retry(case.payment_id, case.category, age_hours=age_h,
+                                                     retry_index=case.retry_count - 1)
+            _verify_retry_outcome(db, case, result, user)
         else:
             _create_live_recovery_link(db, case, provider,
                                         reason_prefix="Retry could not be replayed directly via the Razorpay API")
@@ -248,7 +371,7 @@ def _execute_case(user: User, db: Session, case: RecoveryCase):
         else:
             _create_live_recovery_link(db, case, provider, reason_prefix="Customer needs an alternate payment method")
         if case.status == "waiting":
-            _dispatch_message(db, case)
+            _dispatch_message(db, case, provider)
 
     else:
         case.status = "manual_review"
@@ -275,7 +398,7 @@ def _create_live_recovery_link(db: Session, case: RecoveryCase, provider, reason
                f"falsely reporting that a recovery action was taken.")
 
 
-def _dispatch_message(db: Session, case: RecoveryCase):
+def _dispatch_message(db: Session, case: RecoveryCase, provider=None):
     message_type = rules.next_message_type(case.communications_sent, case.max_communications)
     message = _draft_message(case, message_type)
     if case.payment_link_url:
@@ -308,6 +431,17 @@ def _dispatch_message(db: Session, case: RecoveryCase):
         to_address=case.customer_email, content=message, status=status,
     ))
 
+    # Test Mode only: simulate whether the customer acts on the message, using the same world
+    # model as retries. Recovery is still confirmed only by the next scan's payment verification.
+    if provider is not None and case.source == "test" and hasattr(provider, "simulate_customer_payment"):
+        try:
+            if provider.simulate_customer_payment(case.payment_id, case.communications_sent - 1):
+                _trace(db, case, "Simulation", "Customer completed the payment (Test Mode)",
+                       "The sandbox customer responded to the message and paid. The next scan will verify the "
+                       "captured payment before marking the case recovered.")
+        except Exception:
+            pass
+
 
 def _dispatch_confirmation(db: Session, case: RecoveryCase):
     if not case.customer_email:
@@ -331,8 +465,10 @@ def _dispatch_confirmation(db: Session, case: RecoveryCase):
            "Confirmation drafted and logged; no email provider configured to deliver it.")
 
 
-def _verify_retry_outcome(db: Session, case: RecoveryCase, result: dict):
+def _verify_retry_outcome(db: Session, case: RecoveryCase, result: dict, user: User | None = None):
     outcome = result.get("outcome")
+    if outcome in ("recovered", "failed_again"):
+        ml.record_retry_outcome(db, case, outcome == "recovered")   # bandit reward
     if outcome == "recovered":
         case.status = "recovered"
         case.recovered_amount = case.amount
@@ -345,10 +481,14 @@ def _verify_retry_outcome(db: Session, case: RecoveryCase, result: dict):
     elif outcome == "failed_again":
         if rules.is_within_bounds(case.retry_count, case.max_retries):
             case.status = "waiting"
-            case.next_action_at = datetime.utcnow() + rules.choose_timing(case.category)
+            timing = ml.choose_timing(db, user, case, "retry") if user is not None else None
+            delay = timing.delay if timing else rules.choose_timing(case.category)
+            case.next_action_at = datetime.utcnow() + delay
             _trace(db, case, "Verification", "Retry unsuccessful",
                    f"Retry attempt {case.retry_count} did not recover the payment. "
                    f"Eligible for another attempt after the cooldown window.")
+            if timing is not None and timing.source == "bandit":
+                _trace(db, case, "Timing", f"Next retry in {_fmt_delay(delay)} (learned timing)", timing.explanation)
         else:
             case.status = "exhausted"
             _trace(db, case, "Verification", "Retry unsuccessful", f"Retry attempt {case.retry_count} did not recover the payment.")
@@ -371,6 +511,7 @@ def verify_live_event(db: Session, case: RecoveryCase, event_type: str, summary:
         _trace(db, case, "Audit", "Recovery complete",
                f"{case.currency} {case.amount:,.2f} recovered — confirmed by Razorpay. Future reminders cancelled.")
         _dispatch_confirmation(db, case)
+        ml.sweep_outcomes(db, case.user_id)
     elif "failed" in event_type:
         if rules.is_within_bounds(case.retry_count, case.max_retries):
             case.status = "waiting"
@@ -445,6 +586,7 @@ def get_metrics(user: User, db: Session) -> dict:
         "awaiting_approval": awaiting_approval,
         "active_recovery_cases": sum(1 for c in cases if c.status in ("analyzing", "pending_approval", "approved", "waiting", "retrying", "verifying")),
         "pending_followups": sum(1 for c in cases if c.status == "waiting"),
+        "security_holds": sum(1 for c in cases if c.status == "security_hold"),
         "exhausted_cases": sum(1 for c in cases if c.status == "exhausted"),
         "communications_sent": sum(1 for m in communications if m.status in ("sent", "simulated")),
         "recovery_rate": recovery_rate,

@@ -51,6 +51,31 @@ class Settings(BaseSettings):
     recovery_max_cases_per_scan: int = 25
     recovery_min_probability: float = 0.08
 
+    # ---- ML layer (app/ml) -------------------------------------------------
+    # Every ML component degrades gracefully to the deterministic rules in
+    # app/recovery/rules.py when disabled, missing, or failing.
+    ml_enabled: bool = True
+    ml_artifact_dir: str | None = None            # default: app/ml/artifacts
+    ml_local_utc_offset_minutes: int = 330        # IST; used for hour-of-day / salary-window features
+    ml_sandbox_world: str = "base"               # Test-Mode ground truth: "base" | "shifted" | "conservative" (watch the bandit adapt)
+    ml_history_fetch_limit: int = 300             # recent payments pulled once per scan for features + anomaly checks
+
+    ml_bandit_enabled: bool = True
+    ml_bandit_arms_hours: list[float] = [0.25, 6.0, 12.0, 24.0, 48.0, 72.0]
+    ml_bandit_prior_strength: float = 4.0         # pseudo-observations behind the weak prior
+    ml_immediate_threshold_hours: float = 0.5     # chosen delays <= this execute right away
+
+    ml_anomaly_enabled: bool = True
+    ml_fraud_window_minutes: int = 60
+    ml_fraud_min_failures: int = 3                # minimum evidence before any security hold
+    ml_outage_window_minutes: int = 60
+    ml_outage_baseline_days: int = 7
+    ml_outage_min_attempts: int = 8
+    ml_outage_alpha: float = 1e-4                 # exact-binomial p-value threshold (multiplicity-aware)
+    ml_outage_hold_minutes: int = 60              # how far a deferred retry is pushed out
+    ml_outage_alert_ttl_minutes: int = 120
+    ml_max_outage_deferrals: int = 6              # bounded: never defer a case forever
+
 
 @lru_cache
 def get_settings() -> Settings:

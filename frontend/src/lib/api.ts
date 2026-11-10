@@ -125,6 +125,38 @@ export const api = {
     request<any>(`/api/recovery/cases/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   recoveryMetrics: () => request<any>("/api/recovery/metrics"),
   recoveryConfig: () => request<any>("/api/recovery/config"),
+  recoveryReleaseHold: (id: string) => request<any>(`/api/recovery/cases/${id}/security/release`, { method: "POST" }),
+  recoveryConfirmHold: (id: string) => request<any>(`/api/recovery/cases/${id}/security/confirm`, { method: "POST" }),
+  recoveryAdvance: (hours: number) =>
+    request<{ advanced_hours: number; cases_shifted: number }>("/api/recovery/simulate/advance", {
+      method: "POST",
+      body: JSON.stringify({ hours }),
+    }),
+
+
+  mlOverview: () => request<any>("/api/ml/overview"),
+  mlModel: () => request<any>("/api/ml/model"),
+  mlAnomalyModel: () => request<any>("/api/ml/anomaly-model"),
+  mlEvaluation: () => request<any>("/api/ml/evaluation"),
+  mlRunEvaluation: (body: { n_cases: number; seed: number; approvals_per_day: number }) =>
+    request<any>("/api/ml/evaluation/run", { method: "POST", body: JSON.stringify(body) }),
+  mlBenchmarks: () => request<any>("/api/ml/benchmarks"),
+  mlRealdata: () => request<any>("/api/ml/realdata"),
+  mlBandit: () => request<any>("/api/ml/bandit"),
+  mlAlerts: (status = "all") => request<{ items: any[]; count: number }>(`/api/ml/alerts?status=${status}`),
+  mlAckAlert: (id: string) => request<any>(`/api/ml/alerts/${id}/acknowledge`, { method: "POST" }),
+  mlScore: (body: Record<string, unknown>) =>
+    request<any>("/api/ml/score", { method: "POST", body: JSON.stringify(body) }),
+  mlSimIncident: (kind: "card_testing" | "outage", method = "upi") =>
+    request<{ kind: string; message: string }>("/api/ml/simulate/incident", {
+      method: "POST",
+      body: JSON.stringify({ kind, method }),
+    }),
+  mlSimFailures: (count = 40) =>
+    request<{ created: number }>("/api/ml/simulate/failures", { method: "POST", body: JSON.stringify({ count }) }),
+  mlSimLearn: (cases = 100, rounds = 6, hours_per_round = 24) =>
+    request<any>("/api/ml/simulate/learn", { method: "POST", body: JSON.stringify({ cases, rounds, hours_per_round }) }),
+  mlRetrain: () => request<any>("/api/ml/retrain", { method: "POST" }),
 
 
   agentChat: (message: string, history: any[] = []) =>

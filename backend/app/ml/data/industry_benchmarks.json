@@ -1,0 +1,77 @@
+{
+  "disclaimer": "Vendor-published, unaudited aggregates, mostly subscription billing on cards in US/EU markets. Not a dataset and not specific to Razorpay/UPI. Used only as reality-check targets.",
+  "retrieved": "2026-11",
+  "failure_mix": [
+    {
+      "stat": "Insufficient funds share of all subscription payment failures",
+      "value": 0.405,
+      "source": "Churnkey-Stripe dataset (5M+ failed subscription charges), as quoted by Juspay",
+      "url": "https://juspay.io/blog/smart-payment-retries-which-declines-should-be-retried"
+    },
+    {
+      "stat": "'Do not honor' share of subscription payment failures",
+      "value": 0.075,
+      "source": "Churnkey-Stripe dataset, as quoted by Juspay",
+      "url": "https://juspay.io/blog/smart-payment-retries-which-declines-should-be-retried"
+    },
+    {
+      "stat": "'Do not honor' share of 1,168,245 failed B2C subscription payments (2025-early 2026)",
+      "value": 0.113,
+      "source": "Redux Payments",
+      "url": "https://www.reduxpayments.com/blog/how-to-fix-05-do-not-honor-decline-codes"
+    },
+    {
+      "stat": "Declines caused by insufficient funds or 'do not honor' combined",
+      "value": 0.72,
+      "source": "Adyen",
+      "url": "https://www.adyen.com/en_GB/knowledge-hub/rescue-failed-subscription-payments"
+    }
+  ],
+  "recovery_rates": [
+    {
+      "stat": "Recovery of involuntary failures using Stripe's recovery suite (200+ audited B2C accounts)",
+      "low": 0.25,
+      "high": 0.35,
+      "source": "Redux Payments audit",
+      "url": "https://www.reduxpayments.com/blog/stripe-smart-retries-explained"
+    },
+    {
+      "stat": "Recurly B2C recovery rate (as cited by Redux)",
+      "value": 0.346,
+      "source": "Recurly via Redux Payments",
+      "url": "https://www.reduxpayments.com/blog/stripe-smart-retries-explained"
+    },
+    {
+      "stat": "Average recovery claimed by Stripe",
+      "value": 0.55,
+      "source": "Stripe (vendor claim, as cited by Redux)",
+      "url": "https://www.reduxpayments.com/blog/stripe-smart-retries-explained"
+    },
+    {
+      "stat": "Enterprise recovery before -> after optimised retry strategies",
+      "low": 0.53,
+      "high": 0.71,
+      "source": "Recurly network data (vendor claim)",
+      "url": "https://recurly.com/blog/failed-payment-recovery-data-based-strategy/"
+    },
+    {
+      "stat": "Recovery of 'do not honor' declines with intelligent retries",
+      "value": 0.21,
+      "source": "Redux Payments",
+      "url": "https://www.reduxpayments.com/blog/how-to-fix-05-do-not-honor-decline-codes"
+    }
+  ],
+  "timing": [
+    {
+      "stat": "Share of recovered transactions recovered within 10 days of the failure",
+      "value": 0.9,
+      "source": "Recurly",
+      "url": "https://recurly.com/blog/failed-payment-recovery-data-based-strategy/"
+    }
+  ],
+  "calibration_band": {
+    "low": 0.25,
+    "high": 0.55,
+    "note": "Range spanning audited B2C figures (25-35%) up to the highest vendor claim (55%). The conservative world is calibrated so the rules baseline lands inside it."
+  }
+}

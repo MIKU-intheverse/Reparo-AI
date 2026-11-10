@@ -1,0 +1,52 @@
+{
+  "version": "anomaly-iforest-20261109",
+  "trained_at": "2026-11-09T14:02:28Z",
+  "features": [
+    "n_attempts",
+    "n_failed",
+    "fail_ratio",
+    "n_reasons",
+    "n_methods",
+    "log_median_amount",
+    "amount_cv",
+    "log_min_gap_s",
+    "n_failed_24h"
+  ],
+  "sklearn_version": "1.9.1",
+  "data_provenance": "Synthetic benign + card-testing windows (app/ml/anomaly.py). Benign set includes hard negatives: persistent honest retriers and B2B bulk payers. Unsupervised: attacks are never used for training, only for evaluation.",
+  "operating_threshold": 0.6838,
+  "card_testing": {
+    "auc_benign_vs_attack": 0.9999,
+    "deployed_rule_recall": 1.0,
+    "deployed_rule_false_positive_rate": 0.005,
+    "signature_rule_recall": 0.9387,
+    "signature_rule_false_positive_rate": 0.0,
+    "benign_test_windows": 3000,
+    "attack_test_windows": 800
+  },
+  "outage_detection": {
+    "stream": "5 independent 30-day streams, ~25093 payments each, 10 injected outages per stream (60-240 min, 80-95% failures)",
+    "outages_detected": "36/50",
+    "recall": 0.72,
+    "by_method": {
+      "card": {
+        "outages": 18,
+        "detected": 16,
+        "avg_payments_per_hour": 16
+      },
+      "upi": {
+        "outages": 12,
+        "detected": 11,
+        "avg_payments_per_hour": 12
+      },
+      "netbanking": {
+        "outages": 20,
+        "detected": 9,
+        "avg_payments_per_hour": 5
+      }
+    },
+    "median_detection_delay_min": 30.0,
+    "false_alarm_episodes_per_month": 0.0,
+    "note": "Scanned every 15 minutes with an exact binomial test (alpha=1e-4). Recall is limited by payment volume: quiet hours and low-volume methods (netbanking, wallet) cannot accumulate enough attempts for a statistically sound test, so the detector stays silent rather than guess."
+  }
+}

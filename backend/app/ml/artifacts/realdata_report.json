@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-11-09T14:04:26Z",
+  "dataset": {
+    "name": "UCI Online Retail (real UK online-retailer transactions)",
+    "file": "online_retail_sample.csv.gz",
+    "is_bundled_sample": true,
+    "line_items_read": 15000,
+    "invoices_used": 552,
+    "customers": 413,
+    "period": [
+      "2010-12-01",
+      "2010-12-07"
+    ],
+    "excluded": {
+      "rows_without_customer": 4245,
+      "cancelled_invoices": 73,
+      "unparseable_rows": 0
+    },
+    "licence_note": "CC BY 4.0 per UCI (verify); see app/ml/data/DATA_LICENSE.md",
+    "limits": "Real invoices, but NO payment failures and NO recovery outcomes: it cannot train or score the recovery model. Bundled file is a one-week sample; pass --path for the full data set."
+  },
+  "amount_shape": {
+    "real_log_sd": 1.096,
+    "simulator_log_sd": 1.0,
+    "real_median_gbp": 263.5,
+    "real_p05_p95_gbp": [
+      22.2,
+      1221.1
+    ],
+    "reading": "Shape comparison only (log-spread of invoice totals); levels differ by currency and market."
+  },
+  "activity": {
+    "customers": 413,
+    "invoices_per_customer_median": 1,
+    "invoices_per_customer_p90": 2,
+    "invoices_per_customer_max": 34,
+    "share_of_invoices_with_a_repeat_within_60min": 0.158,
+    "share_of_invoices_with_a_repeat_within_10min": 0.139
+  },
+  "detector_stress": {
+    "model_version": "anomaly-iforest-20261109",
+    "operating_threshold": 0.6838,
+    "synthetic_benign_false_positive_rate": 0.005,
+    "worst_case_all_attempts_fail": {
+      "windows": 552,
+      "held": 26,
+      "rate": 0.0471,
+      "customers_flagged": 4,
+      "max_attempts_in_window": 7
+    },
+    "realistic": {
+      "failure_probability": 0.12,
+      "trials": 25,
+      "failed_windows_per_trial": 66.3,
+      "hold_rate_mean": 0.0,
+      "hold_rate_min": 0.0,
+      "hold_rate_max": 0.0,
+      "customers_flagged_mean": 0.0
+    }
+  },
+  "interpretation": [
+    "The simulator's amount spread (log-sd 1.0) is close to the real invoice-total spread, so the log-normal amount assumption is reasonable in shape.",
+    "Under the worst case \u2014 every real attempt failing \u2014 the detector holds more windows than on synthetic benign data. Those are wholesale customers placing several invoices within minutes; treating a burst of failures from such a customer as worth a human look is defensible, but it does mean B2B-heavy merchants will see more holds.",
+    "Under realistic failure rates the hold rate is far lower, because a hold needs several failures inside one hour.",
+    "Neither number says anything about recall on real fraud: this data set has no fraud labels."
+  ]
+}

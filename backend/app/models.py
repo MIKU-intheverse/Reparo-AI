@@ -187,6 +187,7 @@ class RecoveryStatus(str, enum.Enum):
     exhausted = "exhausted"
     expired = "expired"
     manual_review = "manual_review"
+    security_hold = "security_hold"
 
 
 class FailureCategory(str, enum.Enum):
@@ -281,3 +282,62 @@ class RecoveryCommunication(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     case: Mapped["RecoveryCase"] = relationship(back_populates="communications")
+
+
+class MLDecision(Base):
+    """
+    Feature store + decision log for the ML layer. One row per model decision
+    (kind="risk": recovery-probability scoring; kind="timing": retry-delay arm
+    chosen by the bandit). `outcome` is filled in later (1 = recovered, 0 = not,
+    -1 = censored / unknown), which is what closes the learning loop: resolved
+    rows are the training data for retraining and the reward stream for the
+    bandit. Features are stored as JSON exactly as the model saw them, so
+    every score can be reproduced and audited.
+    """
+    __tablename__ = "ml_decisions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    case_id: Mapped[str] = mapped_column(String, index=True)
+    kind: Mapped[str] = mapped_column(String)
+    model_version: Mapped[str] = mapped_column(String, default="rules")
+    context_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    arm_hours: Mapped[float | None] = mapped_column(Float, nullable=True)
+    probability: Mapped[float | None] = mapped_column(Float, nullable=True)
+    features: Mapped[str] = mapped_column(Text, default="{}")
+    factors: Mapped[str] = mapped_column(Text, default="[]")
+    executed: Mapped[bool] = mapped_column(Boolean, default=False)   # timing decisions: did the retry actually run?
+    outcome: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class BanditArm(Base):
+    """Beta(successes + prior, failures + prior) posterior for one
+    (context, retry-delay) pair of the Thompson-sampling timing bandit."""
+    __tablename__ = "bandit_arms"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    context_key: Mapped[str] = mapped_column(String, index=True)
+    arm_hours: Mapped[float] = mapped_column(Float)
+    successes: Mapped[float] = mapped_column(Float, default=0.0)
+    failures: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class MLAlert(Base):
+    """Anomaly-detection output: card-testing / velocity anomalies per
+    customer and failure-rate spikes (suspected outages) per payment method."""
+    __tablename__ = "ml_alerts"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    kind: Mapped[str] = mapped_column(String)           # card_testing | method_outage
+    severity: Mapped[str] = mapped_column(String, default="medium")
+    subject: Mapped[str] = mapped_column(String)        # customer key or payment method
+    score: Mapped[float] = mapped_column(Float, default=0.0)
+    details: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String, default="open")   # open | acknowledged | resolved
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

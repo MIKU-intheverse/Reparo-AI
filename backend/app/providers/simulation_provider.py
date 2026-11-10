@@ -12,11 +12,16 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
+from app.ml import world
+from app.ml.features import smooth_rate
 from app.models import SimCustomer, SimDispute, SimEvent, SimOrder, SimPayment, SimRefund, SimSettlement
 from app.providers.base import DataProvider
 
+settings = get_settings()
+
 METHODS = ["card", "upi", "netbanking", "wallet"]
-FAILURE_REASONS = ["insufficient_funds", "card_declined", "otp_timeout", "issuer_unavailable", "risk_check_failed"]
+FAILURE_REASONS = list(world.REASONS)   # insufficient_funds, card_declined, otp_timeout, issuer_unavailable, ...
 DISPUTE_REASONS = ["goods_or_services_not_provided", "duplicate_processing", "unrecognized", "fraudulent_transaction"]
 NAMES = ["Nexura Media Group", "Solaria Energy Systems", "Vanguard Fintech Ltd", "ByteScale Software Pvt Ltd",
          "Cobalt Retail Co", "Meridian Logistics", "Orchid Health Labs", "Pinnacle Realty Group"]
@@ -249,15 +254,44 @@ class SimulationProvider(DataProvider):
         return _payment_row(payment)
 
 
+    # Legacy per-category success rates, used only when the ML layer is disabled.
     RECOVERY_SUCCESS_RATE = {"soft_decline": 0.55, "technical": 0.65, "hard_decline": 0.05, "unknown": 0.25}
 
-    def attempt_recovery_retry(self, payment_id: str, category: str) -> dict:
+    # ---- sandbox ground truth: the same world model the ML layer is trained on --------------
+    @staticmethod
+    def _world_params() -> world.WorldParams:
+        return world.get_world(settings.ml_sandbox_world)
+
+    def _customer_history(self, payment: SimPayment) -> tuple[int, int]:
+        prior = self.db.query(SimPayment).filter(
+            SimPayment.user_id == self.user_id, SimPayment.email == payment.email,
+            SimPayment.created_at < payment.created_at, SimPayment.id != payment.id).all()
+        return len(prior), sum(1 for p in prior if p.status in ("captured", "refunded", "authorized"))
+
+    def _local_parts(self):
+        local = datetime.utcnow() + timedelta(minutes=settings.ml_local_utc_offset_minutes)
+        hour, dom, _, _ = world.time_parts_from_datetime(local)
+        return hour, dom
+
+    def _retry_success_probability(self, payment: SimPayment, category: str, age_hours, retry_index) -> float:
+        if not settings.ml_enabled or age_hours is None:
+            return self.RECOVERY_SUCCESS_RATE.get(category, 0.25)
+        n, cap = self._customer_history(payment)
+        hour, dom = self._local_parts()
+        return world.retry_success_prob(payment.failure_reason, payment.method, payment.amount, smooth_rate(cap, n),
+                                        float(age_hours), int(retry_index or 0), hour, dom, self._world_params())
+
+    def attempt_recovery_retry(self, payment_id: str, category: str, age_hours: float | None = None,
+                               retry_index: int | None = None) -> dict:
         """
         Executes a bounded retry against the sandbox. This is the Test Mode
-        counterpart to a real Razorpay retry — since there's no real gateway
-        involved, the outcome is a weighted random draw by failure category,
-        which is enough to demonstrate the full detect -> recover -> verify
-        loop end to end without pretending a live charge occurred.
+        counterpart to a real Razorpay retry. There is no real gateway, so the
+        outcome is a Bernoulli draw whose probability comes from the world model
+        (app/ml/world.py): it depends on WHY the payment failed, the payment
+        method, amount, how long ago it failed, the time of day, the customer's
+        history and how many retries already failed. That is what makes retry
+        timing a learnable problem for the bandit. With the ML layer disabled it
+        falls back to the original flat per-category rates.
         """
         payment = self.db.query(SimPayment).filter_by(user_id=self.user_id, id=payment_id).first()
         if not payment:
@@ -266,7 +300,7 @@ class SimulationProvider(DataProvider):
             return {"outcome": "already_resolved", "payment": _payment_row(payment)}
 
         payment.retry_count += 1
-        success = random.random() < self.RECOVERY_SUCCESS_RATE.get(category, 0.25)
+        success = random.random() < self._retry_success_probability(payment, category, age_hours, retry_index)
 
         if success:
             payment.status = "captured"
@@ -284,3 +318,89 @@ class SimulationProvider(DataProvider):
         self.db.commit()
         self.db.refresh(payment)
         return {"outcome": "recovered" if success else "failed_again", "payment": _payment_row(payment)}
+
+    def simulate_customer_payment(self, payment_id: str, message_index: int) -> bool:
+        """Test Mode: does the sandbox customer act on recovery message #message_index?"""
+        payment = self.db.query(SimPayment).filter_by(user_id=self.user_id, id=payment_id).first()
+        if not payment or payment.status == "captured":
+            return False
+        n, cap = self._customer_history(payment)
+        resp = min(max(0.55 * smooth_rate(cap, n) + 0.45 * random.betavariate(2, 3), 0.02), 0.98)
+        hour, _ = self._local_parts()
+        p = world.link_success_prob(payment.failure_reason, payment.amount, resp, message_index, hour, self._world_params())
+        if random.random() < p:
+            payment.status, payment.captured, payment.failure_reason = "captured", True, None
+            self.db.add(SimEvent(user_id=self.user_id, kind="customer_paid",
+                                 message=f"Customer completed a ₹{payment.amount:.2f} payment after a recovery message."))
+            self.db.commit()
+            return True
+        return False
+
+    # ---- sandbox controls used by the ML demo ---------------------------------------------
+    def shift_time(self, hours: float) -> None:
+        """Simulate time passing: everything time-stamped moves `hours` into the past."""
+        delta = timedelta(hours=hours)
+        for model in (SimPayment, SimOrder, SimEvent):
+            for row in self.db.query(model).filter_by(user_id=self.user_id).all():
+                if getattr(row, "created_at", None) is not None:
+                    row.created_at = row.created_at - delta
+        self.db.flush()
+
+    def _new_customer(self, name: str, email: str) -> SimCustomer:
+        c = SimCustomer(user_id=self.user_id, name=name, email=email, contact=f"+91{random.randint(7000000000, 9999999999)}")
+        self.db.add(c)
+        self.db.flush()
+        return c
+
+    def _add_failed_or_ok(self, customer: SimCustomer, amount: float, method: str, failed: bool, reason: str | None,
+                          created: datetime) -> SimPayment:
+        order = SimOrder(user_id=self.user_id, amount=amount, status="paid", attempts=1, created_at=created)
+        self.db.add(order)
+        self.db.flush()
+        pay = SimPayment(user_id=self.user_id, order_id=order.id, customer_id=customer.id, amount=amount, method=method,
+                         status="failed" if failed else "captured", captured=not failed,
+                         failure_reason=reason if failed else None, email=customer.email, contact=customer.contact,
+                         created_at=created)
+        self.db.add(pay)
+        return pay
+
+    def inject_incident(self, kind: str, method: str = "upi") -> dict:
+        """Create a realistic burst of payments for demoing the anomaly detectors."""
+        now = datetime.utcnow()
+        if kind == "card_testing":
+            tag = random.randint(1000, 9999)
+            cust = self._new_customer(f"Guest checkout {tag}", f"probe.{tag}@tempmail.example")
+            n = 14
+            for i in range(n):
+                created = now - timedelta(seconds=(n - i) * random.randint(25, 45))
+                self._add_failed_or_ok(cust, round(random.uniform(5, 140), 2), "card", random.random() < 0.93,
+                                       random.choice(["card_declined", "risk_check_failed", "do_not_honor"]), created)
+            msg = f"Injected a card-testing burst: {n} small card payments from one guest within ~8 minutes."
+        elif kind == "outage":
+            n = 26
+            for i in range(n):
+                cust = self._new_customer(f"Shopper {random.randint(10000, 99999)}", f"shopper{random.randint(10000, 99999)}@example.org")
+                created = now - timedelta(minutes=random.uniform(0.5, 28))
+                self._add_failed_or_ok(cust, round(random.uniform(200, 6000), 2), method, random.random() < 0.9,
+                                       random.choices(["gateway_timeout", "issuer_unavailable", "bank_timeout"], [.5, .25, .25])[0],
+                                       created)
+            msg = f"Injected a {method.upper()} outage: {n} payments from different customers in the last 30 minutes, ~90% failing with gateway/bank errors."
+        else:
+            raise ValueError("kind must be 'card_testing' or 'outage'")
+        self.db.add(SimEvent(user_id=self.user_id, kind="incident", message=msg))
+        self.db.commit()
+        return {"kind": kind, "message": msg}
+
+    def create_failed_batch(self, count: int) -> dict:
+        """Sample `count` failed payments from the world's failure mix (reasons depend on method)."""
+        count = max(1, min(int(count), 200))
+        cases = world.generate_cases(count, random.randint(1, 10 ** 9), world.BASE_WORLD)
+        customers = [c for c in self.db.query(SimCustomer).filter_by(user_id=self.user_id).all()
+                     if not c.email.startswith(("probe.", "shopper"))] or [self._new_customer("Simulated Customer", "simulated.customer@example.com")]
+        now = datetime.utcnow()
+        for c in cases:
+            created = now - timedelta(minutes=random.uniform(1, 14 * 24 * 60))   # spread over two weeks: no artificial bursts
+            self._add_failed_or_ok(random.choice(customers), round(c.amount, 2), c.method, True, c.reason or "unknown_error", created)
+        self.db.add(SimEvent(user_id=self.user_id, kind="batch", message=f"Generated {count} failed payments from the failure-mix model."))
+        self.db.commit()
+        return {"created": count}
